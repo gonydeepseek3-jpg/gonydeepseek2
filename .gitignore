@@ -40,6 +40,15 @@ logs/
 .Spotlight-V100
 .Trashes
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Backups
+backup/
+*.bak
+
 # Package manager lock files (optional, uncomment if needed)
 # package-lock.json
 # yarn.lock
