@@ -33,3 +33,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 });
+
+// Expose offline interceptor service APIs
+contextBridge.exposeInMainWorld('offlineInterceptor', {
+  // Credentials management
+  setCredentials: (token, secret) =>
+    ipcRenderer.invoke('interceptor-set-credentials', token, secret),
+
+  getCredentials: () => ipcRenderer.invoke('interceptor-get-credentials'),
+
+  clearCredentials: () => ipcRenderer.invoke('interceptor-clear-credentials'),
+
+  // Queue management
+  getQueueStatus: () => ipcRenderer.invoke('interceptor-get-queue-status'),
+
+  getQueuedRequests: (limit = 50) => ipcRenderer.invoke('interceptor-get-queued-requests', limit),
+
+  removeRequest: (id) => ipcRenderer.invoke('interceptor-remove-request', id),
+
+  // Online/offline status
+  setOnlineStatus: (isOnline) => ipcRenderer.invoke('interceptor-set-online-status', isOnline),
+
+  // Maintenance
+  clearOldRequests: (days = 7) => ipcRenderer.invoke('interceptor-clear-old-requests', days),
+});

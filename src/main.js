@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
+import { interceptorService } from './interceptorService.js';
+import { logger } from './logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,9 +44,13 @@ function createWindow() {
   });
 }
 
-app.on('ready', createWindow);
+app.on('ready', () => {
+  interceptorService.initialize();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
+  interceptorService.shutdown();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -66,6 +72,88 @@ ipcMain.handle('get-env-config', () => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// Offline Interceptor Service IPC handlers
+ipcMain.handle('interceptor-set-credentials', async (event, token, secret) => {
+  try {
+    const result = interceptorService.setCredentials(token, secret);
+    logger.info('IPC', 'Credentials set via IPC');
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to set credentials', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-get-credentials', async () => {
+  try {
+    const creds = interceptorService.getCredentials();
+    return creds || { token: null, secret: null };
+  } catch (error) {
+    logger.error('IPC', 'Failed to get credentials', { error: error.message });
+    return { token: null, secret: null };
+  }
+});
+
+ipcMain.handle('interceptor-clear-credentials', async () => {
+  try {
+    const result = interceptorService.clearCredentials();
+    logger.info('IPC', 'Credentials cleared via IPC');
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to clear credentials', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-get-queue-status', async () => {
+  try {
+    return interceptorService.getQueueStatus();
+  } catch (error) {
+    logger.error('IPC', 'Failed to get queue status', { error: error.message });
+    return { pending: 0, completed: 0, failed: 0, total: 0 };
+  }
+});
+
+ipcMain.handle('interceptor-get-queued-requests', async (event, limit = 50) => {
+  try {
+    return interceptorService.getQueuedRequests(limit);
+  } catch (error) {
+    logger.error('IPC', 'Failed to get queued requests', { error: error.message });
+    return [];
+  }
+});
+
+ipcMain.handle('interceptor-remove-request', async (event, id) => {
+  try {
+    const result = interceptorService.removeRequest(id);
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to remove request', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-set-online-status', async (event, isOnline) => {
+  try {
+    interceptorService.setOnlineStatus(isOnline);
+    logger.info('IPC', `Online status set to ${isOnline}`);
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Failed to set online status', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-clear-old-requests', async (event, days = 7) => {
+  try {
+    const result = interceptorService.clearOldRequests(days);
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to clear old requests', { error: error.message });
+    return { success: false, error: error.message };
+  }
 });
 
 // Create application menu
@@ -95,11 +183,7 @@ const template = [
   },
   {
     label: 'View',
-    submenu: [
-      { role: 'reload' },
-      { role: 'forceReload' },
-      { role: 'toggleDevTools' },
-    ],
+    submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
   },
 ];
 
