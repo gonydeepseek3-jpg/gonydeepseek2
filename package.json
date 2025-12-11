@@ -1,0 +1,58 @@
+{
+  "name": "posawsome-desktop",
+  "version": "0.1.0",
+  "description": "POSAwesome ERPNext Desktop Application",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build": "cross-env NODE_ENV=production electron-builder --win",
+    "build:dir": "cross-env NODE_ENV=production electron-builder --dir",
+    "pretest": "eslint src",
+    "test": "echo \"No tests configured yet\" && exit 0",
+    "lint": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{js,html,css,json}\"",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "pos",
+    "posawesome",
+    "erpnext",
+    "erp"
+  ],
+  "author": "POSAwesome Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron/rebuild": "^3.3.0",
+    "cross-env": "^7.0.3",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.3"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "build": {
+    "appId": "com.posawsome.desktop",
+    "productName": "POSAwesome",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
