@@ -10,7 +10,8 @@
     "build": "cross-env NODE_ENV=production electron-builder --win",
     "build:dir": "cross-env NODE_ENV=production electron-builder --dir",
     "pretest": "eslint src",
-    "test": "echo \"No tests configured yet\" && exit 0",
+    "test": "node src/db/__tests__/smoke.test.js",
+    "test:unit": "jest",
     "lint": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{js,html,css,json}\"",
     "pack": "electron-builder --dir",
@@ -33,6 +34,7 @@
     "prettier": "^3.0.3"
   },
   "dependencies": {
+    "better-sqlite3": "^9.0.0",
     "dotenv": "^16.3.1"
   },
   "build": {
