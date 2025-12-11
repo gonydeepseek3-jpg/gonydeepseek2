@@ -10,7 +10,9 @@
     "build": "cross-env NODE_ENV=production electron-builder --win",
     "build:dir": "cross-env NODE_ENV=production electron-builder --dir",
     "pretest": "eslint src",
-    "test": "echo \"No tests configured yet\" && exit 0",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
     "lint": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{js,html,css,json}\"",
     "pack": "electron-builder --dir",
@@ -30,9 +32,12 @@
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
     "eslint": "^8.50.0",
-    "prettier": "^3.0.3"
+    "prettier": "^3.0.3",
+    "vitest": "^1.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "crypto-js": "^4.1.1",
     "dotenv": "^16.3.1"
   },
   "build": {

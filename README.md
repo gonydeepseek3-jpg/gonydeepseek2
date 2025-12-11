@@ -9,7 +9,10 @@ POSAwesome Desktop provides a native desktop experience for ERPNext POS operatio
 - **Local execution** of the ERPNext POSAwesome interface via Electron
 - **Secure IPC communication** between main and renderer processes
 - **Environment-based configuration** for ERPNext connectivity
+- **Offline mode support** with automatic request queuing and synchronization
 - **Automatic synchronization** with ERPNext backend
+- **Secure credential storage** with AES encryption
+- **SQLite-based offline request persistence** for seamless online/offline transitions
 - **Foundation for future Vue-based admin panels** and customizations
 
 ## System Requirements
@@ -24,22 +27,37 @@ POSAwesome Desktop provides a native desktop experience for ERPNext POS operatio
 ```
 posawsome-desktop/
 ├── src/
-│   ├── main.js                 # Electron main process
-│   ├── preload.js              # Secure IPC preload script
+│   ├── main.js                          # Electron main process
+│   ├── preload.js                       # Secure IPC preload script
+│   ├── logger.js                        # Logging service
+│   ├── credentialStore.js               # Secure credential storage
+│   ├── offlineQueueManager.js           # SQLite offline queue
+│   ├── httpInterceptor.js               # HTTP request interception
+│   ├── requestProcessor.js              # Offline queue processor
+│   ├── interceptorService.js            # Offline service orchestrator
 │   ├── renderer/
-│   │   ├── index.html          # Main renderer HTML
+│   │   ├── index.html                   # Main renderer HTML
 │   │   ├── styles/
-│   │   │   └── main.css        # Application styling
+│   │   │   └── main.css                 # Application styling
 │   │   └── js/
-│   │       └── app.js          # Renderer process JavaScript
+│   │       ├── app.js                   # Renderer process JavaScript
+│   │       └── offline-interceptor-example.js # Usage example
+│   └── __tests__/                       # Unit tests
+│       ├── logger.test.js
+│       ├── credentialStore.test.js
+│       ├── offlineQueueManager.test.js
+│       ├── httpInterceptor.test.js
+│       └── interceptorService.test.js
 │
-├── package.json                # Project dependencies and scripts
-├── .env.sample                 # Sample environment configuration
-├── .env                        # Environment configuration (gitignored)
-├── .eslintrc.json              # ESLint configuration
-├── .prettierrc                 # Prettier code formatting config
-├── .gitignore                  # Git ignore rules
-└── README.md                   # This file
+├── package.json                         # Project dependencies and scripts
+├── vitest.config.js                     # Vitest configuration
+├── .env.sample                          # Sample environment configuration
+├── .env                                 # Environment configuration (gitignored)
+├── .eslintrc.json                       # ESLint configuration
+├── .prettierrc                          # Prettier code formatting config
+├── .gitignore                           # Git ignore rules
+├── OFFLINE_INTERCEPTOR.md               # Offline interceptor documentation
+└── README.md                            # This file
 ```
 
 ## Getting Started
@@ -190,6 +208,19 @@ Provides secure:
 - Context isolation between main and renderer
 - Limited IPC communication channels
 - Safe access to configuration and version info
+- Offline interceptor IPC APIs for request queuing and credential management
+
+### Offline Interceptor Service
+
+The offline interceptor service provides transparent HTTP request interception:
+- **HTTPInterceptor** (`src/httpInterceptor.js`): Core request interception and routing
+- **OfflineQueueManager** (`src/offlineQueueManager.js`): SQLite-based persistence and request queuing
+- **CredentialStore** (`src/credentialStore.js`): Secure credential storage with AES encryption
+- **RequestProcessor** (`src/requestProcessor.js`): Periodic queue processing when online
+- **Logger** (`src/logger.js`): Comprehensive logging system
+- **InterceptorService** (`src/interceptorService.js`): Service orchestration and IPC handlers
+
+See [OFFLINE_INTERCEPTOR.md](./OFFLINE_INTERCEPTOR.md) for detailed documentation.
 
 ## Features
 
@@ -205,17 +236,29 @@ Provides secure:
 - [x] Windows packaging support (NSIS + Portable)
 - [x] Status monitoring and sync intervals
 - [x] Responsive UI design
+- [x] **Offline HTTP Interceptor Service**
+  - [x] Request interception via preload script
+  - [x] Online/offline request routing
+  - [x] SQLite-based offline queue persistence
+  - [x] Request deduplication via SHA256 hashing
+  - [x] Secure credential storage with AES encryption
+  - [x] Automatic queue processing on reconnection
+  - [x] Response caching for read requests
+  - [x] Retry logic with configurable max retries
+  - [x] IPC APIs for queue monitoring and control
+  - [x] Comprehensive logging system
+  - [x] Unit tests with Vitest (24 tests)
 
 ### 🔮 Future Enhancements
 
 - [ ] Vue.js-based admin panel
-- [ ] Offline data synchronization
-- [ ] Local database integration (SQLite)
 - [ ] Extended authentication methods (OAuth, SSO)
 - [ ] Platform-specific builds (macOS, Linux)
 - [ ] Auto-update functionality
 - [ ] Advanced error handling and recovery
 - [ ] Application telemetry and analytics
+- [ ] Request compression for offline storage
+- [ ] Conflict resolution for concurrent updates
 
 ## Debugging
 
