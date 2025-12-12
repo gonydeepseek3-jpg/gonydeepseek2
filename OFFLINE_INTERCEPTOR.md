@@ -166,15 +166,15 @@ await requestProcessor.processQueue();
 2. Request is intercepted
 3. Request is added to SQLite queue with deduplication
 4. 202 Accepted response with queue ID returned immediately
-5. When online, RequestProcessor processes queued requests
+5. When online, SyncEngine processes queued requests
 6. Retries continue until success or max retries exceeded
 
 ## Database Schema
 
-### offline_requests Table
+### sync_queue Table
 
 ```sql
-CREATE TABLE offline_requests (
+CREATE TABLE sync_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method TEXT NOT NULL,              -- HTTP method (GET, POST, etc.)
   url TEXT NOT NULL,                 -- Request URL
@@ -183,9 +183,13 @@ CREATE TABLE offline_requests (
   request_hash TEXT UNIQUE,          -- Hash for deduplication
   status TEXT DEFAULT 'pending',     -- pending, completed, failed
   retry_count INTEGER DEFAULT 0,     -- Number of retry attempts
+  next_retry_at DATETIME,            -- Next allowed retry time (backoff)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  error_message TEXT                 -- Error details if failed
+  error_message TEXT,                -- Error details if failed
+  resource_id TEXT,
+  resource_type TEXT,
+  resource_version TEXT
 );
 ```
 

@@ -37,7 +37,7 @@ class RequestProcessor {
     this.isProcessing = true;
 
     try {
-      const requests = offlineQueueManager.getQueuedRequests(10);
+      const requests = offlineQueueManager.getQueuedRequests(10, 'pending');
 
       if (requests.length === 0) {
         this.isProcessing = false;

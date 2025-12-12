@@ -74,7 +74,8 @@ body {
   overflow: hidden;
 }
 
-.posawsome-container iframe {
+.posawsome-container iframe,
+.posawsome-container webview {
   width: 100%;
   height: 100%;
   border: none;

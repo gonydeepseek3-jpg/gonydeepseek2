@@ -68,6 +68,12 @@ class AdminDashboard {
           <div id="tab-queue" class="tab-content">
             <div class="queue-controls">
               <input type="number" id="queue-limit" value="50" min="1" max="500">
+              <select id="queue-status" class="select">
+                <option value="">All</option>
+                <option value="pending">Pending</option>
+                <option value="failed">Failed</option>
+                <option value="completed">Completed</option>
+              </select>
               <button id="refresh-queue" class="btn btn-secondary">Refresh</button>
               <button id="clear-old" class="btn btn-warning">Clear Old (7 days)</button>
             </div>
@@ -143,7 +149,7 @@ class AdminDashboard {
 
     const clearOldBtn = document.getElementById('clear-old');
     if (clearOldBtn) {
-      clearOldBtn.addEventListener('click', () => this.clearOldRequests());
+      clearOldBtn.addEventListener('click', () => this.clearOldRequests(7));
     }
 
     // Conflict actions
@@ -165,7 +171,7 @@ class AdminDashboard {
 
     const clearOldRequestsBtn = document.getElementById('clear-old-requests');
     if (clearOldRequestsBtn) {
-      clearOldRequestsBtn.addEventListener('click', () => this.clearOldRequests());
+      clearOldRequestsBtn.addEventListener('click', () => this.clearOldRequests(7));
     }
 
     // Listen for sync state changes
@@ -255,7 +261,7 @@ class AdminDashboard {
       this.updateQueueStats(queueStats);
 
       // Update online status
-      this.updateOnlineStatus();
+      await this.updateOnlineStatus();
 
     } catch (error) {
       console.error('Failed to update status:', error);
@@ -272,12 +278,19 @@ class AdminDashboard {
     if (!statusElement) return;
 
     const status = syncStatus.state || 'unknown';
-    const lastSync = syncStatus.lastSyncTime ? 
-      new Date(syncStatus.lastSyncTime).toLocaleString() : 'Never';
-    
+    const lastSync = syncStatus.lastSyncTime
+      ? new Date(syncStatus.lastSyncTime).toLocaleString()
+      : 'Never';
+
+    const stats = syncStatus.stats || {};
+    const successCount = stats.successCount || 0;
+    const failureCount = stats.failureCount || 0;
+    const conflictCount = stats.conflictCount || 0;
+    const lastDurationMs = stats.lastSyncDuration || 0;
+
     statusElement.innerHTML = `
       <div class="status-item">
-        <strong>State:</strong> 
+        <strong>State:</strong>
         <span class="status-${status}">${status.toUpperCase()}</span>
       </div>
       <div class="status-item">
@@ -286,9 +299,10 @@ class AdminDashboard {
       <div class="status-item">
         <strong>Stats:</strong>
         <ul>
-          <li>Completed: ${syncStatus.stats?.completed || 0}</li>
-          <li>Failed: ${syncStatus.stats?.failed || 0}</li>
-          <li>Retries: ${syncStatus.stats?.retries || 0}</li>
+          <li>Success: ${successCount}</li>
+          <li>Failed: ${failureCount}</li>
+          <li>Conflicts: ${conflictCount}</li>
+          <li>Last Duration: ${Math.round(lastDurationMs / 1000)}s</li>
         </ul>
       </div>
     `;
@@ -315,19 +329,41 @@ class AdminDashboard {
   /**
    * Update online status display
    */
-  updateOnlineStatus() {
+  async updateOnlineStatus() {
     const onlineElement = document.getElementById('online-status');
     if (!onlineElement) return;
 
-    const isOnline = navigator.onLine;
-    onlineElement.innerHTML = `
-      <div class="status-item">
-        <strong>Browser:</strong> 
-        <span class="status-${isOnline ? 'online' : 'offline'}">
-          ${isOnline ? 'ONLINE' : 'OFFLINE'}
-        </span>
-      </div>
-    `;
+    const browserOnline = navigator.onLine;
+
+    try {
+      const interceptorStatus = await window.offlineInterceptor.getOnlineStatus();
+      const interceptorOnline = interceptorStatus?.isOnline ?? true;
+
+      onlineElement.innerHTML = `
+        <div class="status-item">
+          <strong>Network:</strong>
+          <span class="status-${browserOnline ? 'online' : 'offline'}">
+            ${browserOnline ? 'ONLINE' : 'OFFLINE'}
+          </span>
+        </div>
+        <div class="status-item">
+          <strong>Interceptor:</strong>
+          <span class="status-${interceptorOnline ? 'online' : 'offline'}">
+            ${interceptorOnline ? 'ONLINE' : 'OFFLINE'}
+          </span>
+        </div>
+      `;
+    } catch (error) {
+      console.error('Failed to get interceptor online status:', error);
+      onlineElement.innerHTML = `
+        <div class="status-item">
+          <strong>Network:</strong>
+          <span class="status-${browserOnline ? 'online' : 'offline'}">
+            ${browserOnline ? 'ONLINE' : 'OFFLINE'}
+          </span>
+        </div>
+      `;
+    }
   }
 
   /**
@@ -337,8 +373,11 @@ class AdminDashboard {
     try {
       const limitInput = document.getElementById('queue-limit');
       const limit = parseInt(limitInput?.value || 50);
-      
-      const requests = await window.offlineInterceptor.getQueuedRequests(limit);
+
+      const statusSelect = document.getElementById('queue-status');
+      const status = statusSelect?.value || null;
+
+      const requests = await window.offlineInterceptor.getQueuedRequests(limit, status);
       this.displayQueueRequests(requests);
     } catch (error) {
       console.error('Failed to refresh queue:', error);
@@ -359,7 +398,9 @@ class AdminDashboard {
       return;
     }
 
-    const requestHtml = requests.map(request => `
+    const requestHtml = requests
+      .map(
+        (request) => `
       <div class="request-item">
         <div class="request-header">
           <span class="method method-${request.method}">${request.method}</span>
@@ -376,14 +417,23 @@ class AdminDashboard {
           <div class="detail-row">
             <strong>Retries:</strong> ${request.retry_count}
           </div>
+          ${
+            request.next_retry_at
+              ? `<div class="detail-row"><strong>Next Retry:</strong> ${new Date(request.next_retry_at).toLocaleString()}</div>`
+              : ''
+          }
           ${request.error_message ? `<div class="error">Error: ${request.error_message}</div>` : ''}
         </div>
         <div class="request-actions">
+          <button onclick="adminDashboard.retryRequest('${request.id}')" 
+                  class="btn btn-sm btn-primary">Retry</button>
           <button onclick="adminDashboard.removeRequest('${request.id}')" 
                   class="btn btn-sm btn-danger">Remove</button>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
     queueElement.innerHTML = requestHtml;
   }
@@ -395,11 +445,33 @@ class AdminDashboard {
   async removeRequest(requestId) {
     try {
       await window.offlineInterceptor.removeRequest(requestId);
-      this.refreshQueue(); // Refresh the list
+      await this.refreshQueue();
       this.showSuccess('Request removed successfully');
     } catch (error) {
       console.error('Failed to remove request:', error);
       this.showError('queue', 'Failed to remove request');
+    }
+  }
+
+  /**
+   * Retry a queued request immediately
+   * @param {string} requestId - Request ID to retry
+   */
+  async retryRequest(requestId) {
+    try {
+      const result = await window.offlineInterceptor.retryRequest(requestId, {
+        resetRetryCount: true,
+      });
+
+      if (!result?.success) {
+        throw new Error(result?.error || 'Retry failed');
+      }
+
+      await this.refreshQueue();
+      this.showSuccess('Request re-queued for retry');
+    } catch (error) {
+      console.error('Failed to retry request:', error);
+      this.showError('queue', 'Failed to retry request');
     }
   }
 
@@ -446,12 +518,26 @@ class AdminDashboard {
           <div class="detail-row">
             <strong>Status:</strong> ${conflict.resolution_status}
           </div>
-          ${conflict.server_data ? `
+          ${
+            conflict.server_data
+              ? `
             <div class="data-comparison">
               <strong>Server Data:</strong>
-              <pre>${JSON.stringify(JSON.parse(conflict.server_data), null, 2)}</pre>
+              <pre>${JSON.stringify(conflict.server_data, null, 2)}</pre>
             </div>
-          ` : ''}
+          `
+              : ''
+          }
+          ${
+            conflict.local_data
+              ? `
+            <div class="data-comparison">
+              <strong>Local Data:</strong>
+              <pre>${JSON.stringify(conflict.local_data, null, 2)}</pre>
+            </div>
+          `
+              : ''
+          }
         </div>
         <div class="conflict-actions">
           <button onclick="adminDashboard.resolveConflict('${conflict.id}', 'local_wins')" 
@@ -475,7 +561,7 @@ class AdminDashboard {
   async resolveConflict(conflictId, resolution) {
     try {
       await window.offlineInterceptor.resolveConflict(conflictId, resolution);
-      this.refreshConflicts(); // Refresh the list
+      await this.refreshConflicts();
       this.showSuccess('Conflict resolved successfully');
     } catch (error) {
       console.error('Failed to resolve conflict:', error);
@@ -490,7 +576,7 @@ class AdminDashboard {
     try {
       await window.offlineInterceptor.forceSync();
       this.showSuccess('Sync triggered successfully');
-      this.updateStatus(); // Refresh status
+      await this.updateStatus();
     } catch (error) {
       console.error('Failed to force sync:', error);
       this.showError('status', 'Failed to trigger sync');
@@ -502,10 +588,13 @@ class AdminDashboard {
    */
   async toggleOnlineStatus() {
     try {
-      const isOnline = navigator.onLine;
-      await window.offlineInterceptor.setOnlineStatus(!isOnline);
-      this.showSuccess(`Online status set to ${!isOnline ? 'online' : 'offline'}`);
-      this.updateOnlineStatus();
+      const current = await window.offlineInterceptor.getOnlineStatus();
+      const isInterceptorOnline = current?.isOnline ?? true;
+      const next = !isInterceptorOnline;
+
+      await window.offlineInterceptor.setOnlineStatus(next);
+      this.showSuccess(`Interceptor online status set to ${next ? 'online' : 'offline'}`);
+      await this.updateOnlineStatus();
     } catch (error) {
       console.error('Failed to toggle online status:', error);
       this.showError('status', 'Failed to change online status');
@@ -515,24 +604,21 @@ class AdminDashboard {
   /**
    * Clear old requests
    */
-  async clearOldRequests() {
+  async clearOldRequests(days = 7) {
     try {
-      const daysInput = this.currentTab === 'queue' ? 
-        document.getElementById('queue-limit') : 
-        document.getElementById('conflict-limit');
-      const days = daysInput ? parseInt(daysInput.value) : 7;
-      
       await window.offlineInterceptor.clearOldRequests(days);
       this.showSuccess(`Cleared requests older than ${days} days`);
-      
+
       // Refresh current tab
       switch (this.currentTab) {
         case 'queue':
-          this.refreshQueue();
+          await this.refreshQueue();
           break;
         case 'conflicts':
-          this.refreshConflicts();
+          await this.refreshConflicts();
           break;
+        default:
+          await this.updateStatus();
       }
     } catch (error) {
       console.error('Failed to clear old requests:', error);
@@ -589,13 +675,15 @@ class AdminDashboard {
       if (this.isVisible) {
         switch (this.currentTab) {
           case 'status':
-            this.updateStatus();
+            this.updateStatus().catch((error) => console.error('Auto-refresh status failed:', error));
             break;
           case 'queue':
-            this.refreshQueue();
+            this.refreshQueue().catch((error) => console.error('Auto-refresh queue failed:', error));
             break;
           case 'conflicts':
-            this.refreshConflicts();
+            this.refreshConflicts().catch((error) =>
+              console.error('Auto-refresh conflicts failed:', error)
+            );
             break;
         }
       }

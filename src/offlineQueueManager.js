@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { app } from 'electron';
 import { logger } from './logger.js';
+import { applyMigrations } from './sqlite/migrations.js';
 
 const MODULE = 'OfflineQueueManager';
 
@@ -33,63 +34,10 @@ class OfflineQueueManager {
     if (!this.db) return;
 
     try {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS offline_requests (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          method TEXT NOT NULL,
-          url TEXT NOT NULL,
-          headers TEXT,
-          body TEXT,
-          request_hash TEXT UNIQUE,
-          status TEXT DEFAULT 'pending',
-          retry_count INTEGER DEFAULT 0,
-          next_retry_at DATETIME,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          error_message TEXT,
-          resource_id TEXT,
-          resource_type TEXT,
-          resource_version TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS request_cache (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          request_hash TEXT UNIQUE NOT NULL,
-          response_data TEXT,
-          cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS sync_conflicts (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          resource_id TEXT NOT NULL,
-          resource_type TEXT NOT NULL,
-          local_request_id INTEGER,
-          local_data TEXT,
-          server_data TEXT,
-          server_version TEXT,
-          conflict_type TEXT,
-          resolution_status TEXT DEFAULT 'pending',
-          resolved_at DATETIME,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (local_request_id) REFERENCES offline_requests(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS sync_metadata (
-          key TEXT PRIMARY KEY,
-          value TEXT,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_offline_requests_status ON offline_requests(status);
-        CREATE INDEX IF NOT EXISTS idx_offline_requests_url ON offline_requests(url);
-        CREATE INDEX IF NOT EXISTS idx_offline_requests_next_retry ON offline_requests(next_retry_at);
-        CREATE INDEX IF NOT EXISTS idx_sync_conflicts_resource ON sync_conflicts(resource_id, resource_type);
-        CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(resolution_status);
-      `);
-
-      logger.debug(MODULE, 'Database tables created');
+      applyMigrations(this.db, logger);
+      logger.debug(MODULE, 'Database migrations applied');
     } catch (error) {
-      logger.error(MODULE, 'Failed to create tables', { error: error.message });
+      logger.error(MODULE, 'Failed to apply migrations', { error: error.message });
       throw error;
     }
   }
@@ -104,38 +52,49 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT OR IGNORE INTO offline_requests 
+        INSERT OR IGNORE INTO sync_queue 
         (method, url, headers, body, request_hash, status) 
         VALUES (?, ?, ?, ?, ?, 'pending')
       `);
 
       const result = stmt.run(method, url, JSON.stringify(headers || {}), body, requestHash);
 
-      logger.info(MODULE, 'Request added to offline queue', {
-        id: result.lastInsertRowid,
+      let id = result.lastInsertRowid;
+      if (result.changes === 0 && requestHash) {
+        const existing = this.db
+          .prepare('SELECT id FROM sync_queue WHERE request_hash = ?')
+          .get(requestHash);
+        id = existing?.id || null;
+      }
+
+      logger.info(MODULE, 'Request added to sync queue', {
+        id,
         method,
         url,
       });
 
-      return result.lastInsertRowid;
+      return id;
     } catch (error) {
       logger.error(MODULE, 'Failed to add request to queue', { error: error.message });
       return null;
     }
   }
 
-  getQueuedRequests(limit = 50) {
+  getQueuedRequests(limit = 50, status = null) {
     if (!this.db) return [];
 
     try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM offline_requests 
-        WHERE status = 'pending' 
-        ORDER BY created_at ASC 
-        LIMIT ?
-      `);
+      let requests;
+      if (status) {
+        const stmt = this.db.prepare(
+          `SELECT * FROM sync_queue WHERE status = ? ORDER BY created_at DESC LIMIT ?`
+        );
+        requests = stmt.all(status, limit);
+      } else {
+        const stmt = this.db.prepare(`SELECT * FROM sync_queue ORDER BY created_at DESC LIMIT ?`);
+        requests = stmt.all(limit);
+      }
 
-      const requests = stmt.all(limit);
       return requests.map((req) => ({
         ...req,
         headers: JSON.parse(req.headers || '{}'),
@@ -151,7 +110,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        UPDATE offline_requests 
+        UPDATE sync_queue 
         SET status = ?, updated_at = CURRENT_TIMESTAMP, error_message = ?
         WHERE id = ?
       `);
@@ -170,7 +129,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        UPDATE offline_requests 
+        UPDATE sync_queue 
         SET retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
@@ -187,7 +146,7 @@ class OfflineQueueManager {
     if (!this.db) return false;
 
     try {
-      const stmt = this.db.prepare('DELETE FROM offline_requests WHERE id = ?');
+      const stmt = this.db.prepare('DELETE FROM sync_queue WHERE id = ?');
       stmt.run(id);
       logger.debug(MODULE, 'Request removed from queue', { id });
       return true;
@@ -245,7 +204,7 @@ class OfflineQueueManager {
         SELECT 
           status,
           COUNT(*) as count 
-        FROM offline_requests 
+        FROM sync_queue 
         GROUP BY status
       `);
 
@@ -279,7 +238,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        DELETE FROM offline_requests 
+        DELETE FROM sync_queue 
         WHERE created_at < datetime('now', '-' || ? || ' days')
       `);
 
@@ -297,7 +256,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT * FROM offline_requests 
+        SELECT * FROM sync_queue 
         WHERE status = 'pending' 
         AND (next_retry_at IS NULL OR next_retry_at <= datetime('now'))
         ORDER BY created_at ASC 
@@ -321,7 +280,7 @@ class OfflineQueueManager {
     try {
       const nextRetry = new Date(Date.now() + retryDelayMs).toISOString();
       const stmt = this.db.prepare(`
-        UPDATE offline_requests 
+        UPDATE sync_queue 
         SET next_retry_at = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
@@ -335,12 +294,81 @@ class OfflineQueueManager {
     }
   }
 
+  retryRequest(id, { resetRetryCount = false } = {}) {
+    if (!this.db) return false;
+
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE sync_queue
+        SET status = 'pending',
+            next_retry_at = NULL,
+            error_message = NULL,
+            retry_count = CASE WHEN ? THEN 0 ELSE retry_count END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `);
+
+      const result = stmt.run(resetRetryCount ? 1 : 0, id);
+
+      logger.info(MODULE, 'Request re-queued for retry', {
+        id,
+        resetRetryCount,
+        changed: result.changes,
+      });
+
+      return result.changes > 0;
+    } catch (error) {
+      logger.error(MODULE, 'Failed to retry request', { error: error.message });
+      return false;
+    }
+  }
+
+  addSyncLog(queueId, eventType, message = null, meta = null) {
+    if (!this.db) return false;
+
+    try {
+      const stmt = this.db.prepare(
+        'INSERT INTO sync_log (queue_id, event_type, message, meta) VALUES (?, ?, ?, ?)'
+      );
+      stmt.run(queueId || null, eventType, message, meta ? JSON.stringify(meta) : null);
+      return true;
+    } catch (error) {
+      logger.error(MODULE, 'Failed to add sync log entry', { error: error.message });
+      return false;
+    }
+  }
+
+  getSyncLog(limit = 100) {
+    if (!this.db) return [];
+
+    try {
+      const rows = this.db
+        .prepare('SELECT * FROM sync_log ORDER BY created_at DESC LIMIT ?')
+        .all(limit);
+      return rows.map((row) => {
+        let parsedMeta = null;
+        if (row.meta) {
+          try {
+            parsedMeta = JSON.parse(row.meta);
+          } catch {
+            parsedMeta = row.meta;
+          }
+        }
+
+        return { ...row, meta: parsedMeta };
+      });
+    } catch (error) {
+      logger.error(MODULE, 'Failed to fetch sync log entries', { error: error.message });
+      return [];
+    }
+  }
+
   addConflict(resourceId, resourceType, localRequestId, localData, serverData, serverVersion, conflictType) {
     if (!this.db) return null;
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO sync_conflicts 
+        INSERT INTO conflict_log 
         (resource_id, resource_type, local_request_id, local_data, server_data, server_version, conflict_type, resolution_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
       `);
@@ -373,7 +401,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT * FROM sync_conflicts 
+        SELECT * FROM conflict_log 
         WHERE resolution_status = 'pending'
         ORDER BY created_at ASC
         LIMIT ?
@@ -396,7 +424,7 @@ class OfflineQueueManager {
 
     try {
       const stmt = this.db.prepare(`
-        UPDATE sync_conflicts 
+        UPDATE conflict_log 
         SET resolution_status = ?, resolved_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
@@ -414,7 +442,7 @@ class OfflineQueueManager {
     if (!this.db) return null;
 
     try {
-      const stmt = this.db.prepare('SELECT * FROM sync_conflicts WHERE id = ?');
+      const stmt = this.db.prepare('SELECT * FROM conflict_log WHERE id = ?');
       const conflict = stmt.get(conflictId);
       
       if (!conflict) return null;
