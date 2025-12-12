@@ -243,7 +243,21 @@ const template = [
   },
   {
     label: 'View',
-    submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
+    submenu: [
+      { role: 'reload' }, 
+      { role: 'forceReload' }, 
+      { role: 'toggleDevTools' },
+      { type: 'separator' },
+      {
+        label: 'Admin Dashboard',
+        accelerator: 'Ctrl+Shift+A',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('toggle-admin-dashboard');
+          }
+        },
+      },
+    ],
   },
 ];
 

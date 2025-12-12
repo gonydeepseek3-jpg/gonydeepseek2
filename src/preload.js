@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Listen for messages from main process
   on: (channel, callback) => {
-    const validChannels = ['config-updated', 'sync-state-changed', 'sync-progress'];
+    const validChannels = ['config-updated', 'sync-state-changed', 'sync-progress', 'toggle-admin-dashboard'];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }

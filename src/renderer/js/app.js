@@ -20,6 +20,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup event listeners
     setupEventListeners();
 
+    // Listen for main process messages
+    window.electronAPI.on('toggle-admin-dashboard', () => {
+      if (window.adminDashboard) {
+        window.adminDashboard.togglePanel();
+      }
+    });
+
+    // Add keyboard shortcut for admin panel
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        if (window.adminDashboard) {
+          window.adminDashboard.togglePanel();
+        }
+      }
+    });
+
     // Start synchronization if configured
     if (config.syncInterval > 0) {
       startSyncInterval(config.syncInterval);
