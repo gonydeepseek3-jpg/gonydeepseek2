@@ -44,7 +44,7 @@ describe('Sync Workflow Integration Tests', () => {
 
       for (let i = 0; i < maxRetries; i++) {
         const result = await mockFailedRequest();
-        
+
         if (!result.ok && request.retry_count < maxRetries) {
           request.retry_count++;
           const delay = baseDelay * Math.pow(2, request.retry_count - 1);

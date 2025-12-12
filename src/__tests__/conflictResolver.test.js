@@ -40,7 +40,7 @@ describe('ConflictResolver Integration Tests', () => {
     it('should extract resource info from URL', () => {
       const url = '/api/resource/Item/ITEM001';
       const urlParts = url.split('/').filter(Boolean);
-      
+
       const resourceType = urlParts[urlParts.length - 2];
       const resourceId = urlParts[urlParts.length - 1];
 

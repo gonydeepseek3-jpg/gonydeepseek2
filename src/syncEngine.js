@@ -56,7 +56,7 @@ class SyncEngine extends EventEmitter {
 
   async safeShutdown() {
     logger.info(MODULE, 'Initiating safe shutdown');
-    
+
     this.stop();
 
     if (this.isProcessing) {
@@ -83,7 +83,8 @@ class SyncEngine extends EventEmitter {
   loadLastSyncTime() {
     this.lastSyncTime = offlineQueueManager.getSyncMetadata('last_sync_time');
     if (this.lastSyncTime) {
-      const daysSinceSync = (Date.now() - new Date(this.lastSyncTime).getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceSync =
+        (Date.now() - new Date(this.lastSyncTime).getTime()) / (1000 * 60 * 60 * 24);
       logger.info(MODULE, 'Last sync loaded', {
         lastSyncTime: this.lastSyncTime,
         daysSinceSync: daysSinceSync.toFixed(2),
@@ -109,11 +110,8 @@ class SyncEngine extends EventEmitter {
   }
 
   calculateRetryDelay(retryCount) {
-    const delay = Math.min(
-      this.baseRetryDelay * Math.pow(2, retryCount),
-      this.maxRetryDelay
-    );
-    
+    const delay = Math.min(this.baseRetryDelay * Math.pow(2, retryCount), this.maxRetryDelay);
+
     const jitter = Math.random() * delay * 0.1;
     return Math.floor(delay + jitter);
   }
@@ -124,7 +122,7 @@ class SyncEngine extends EventEmitter {
     }
 
     const requests = offlineQueueManager.getRequestsReadyForRetry();
-    
+
     if (requests.length === 0) {
       if (this.syncState !== 'idle') {
         this.setState('idle');
@@ -145,7 +143,7 @@ class SyncEngine extends EventEmitter {
 
       for (const request of requests.slice(0, this.batchSize)) {
         const result = await this.processRequest(request);
-        
+
         if (result.success) {
           successCount++;
         } else if (result.conflict) {
@@ -210,7 +208,7 @@ class SyncEngine extends EventEmitter {
       }
 
       const conflictResult = await conflictResolver.handleConflict(request, response);
-      
+
       if (conflictResult) {
         logger.info(MODULE, 'Conflict detected and handled', {
           requestId: request.id,
@@ -233,7 +231,7 @@ class SyncEngine extends EventEmitter {
       const retryDelay = this.calculateRetryDelay(request.retry_count);
       offlineQueueManager.incrementRetryCount(request.id);
       offlineQueueManager.setNextRetryTime(request.id, retryDelay);
-      
+
       logger.info(MODULE, 'Request will be retried', {
         id: request.id,
         retryCount: request.retry_count + 1,

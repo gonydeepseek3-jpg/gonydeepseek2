@@ -9,7 +9,7 @@ class AdminDashboard {
     this.refreshInterval = null;
     this.isVisible = false;
     this.currentTab = 'status';
-    
+
     this.init();
   }
 
@@ -120,7 +120,7 @@ class AdminDashboard {
     }
 
     // Navigation tabs
-    document.querySelectorAll('.nav-tab').forEach(tab => {
+    document.querySelectorAll('.nav-tab').forEach((tab) => {
       tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
     });
 
@@ -180,13 +180,13 @@ class AdminDashboard {
    */
   switchTab(tabName) {
     // Update navigation
-    document.querySelectorAll('.nav-tab').forEach(tab => {
+    document.querySelectorAll('.nav-tab').forEach((tab) => {
       tab.classList.remove('active');
     });
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
 
     // Update content
-    document.querySelectorAll('.tab-content').forEach(content => {
+    document.querySelectorAll('.tab-content').forEach((content) => {
       content.classList.remove('active');
     });
     document.getElementById(`tab-${tabName}`).classList.add('active');
@@ -195,15 +195,15 @@ class AdminDashboard {
 
     // Load data for the active tab
     switch (tabName) {
-      case 'status':
-        this.updateStatus();
-        break;
-      case 'queue':
-        this.refreshQueue();
-        break;
-      case 'conflicts':
-        this.refreshConflicts();
-        break;
+    case 'status':
+      this.updateStatus();
+      break;
+    case 'queue':
+      this.refreshQueue();
+      break;
+    case 'conflicts':
+      this.refreshConflicts();
+      break;
     }
   }
 
@@ -256,7 +256,6 @@ class AdminDashboard {
 
       // Update online status
       this.updateOnlineStatus();
-
     } catch (error) {
       console.error('Failed to update status:', error);
       this.showError('status', 'Failed to load status information');
@@ -272,9 +271,10 @@ class AdminDashboard {
     if (!statusElement) return;
 
     const status = syncStatus.state || 'unknown';
-    const lastSync = syncStatus.lastSyncTime ? 
-      new Date(syncStatus.lastSyncTime).toLocaleString() : 'Never';
-    
+    const lastSync = syncStatus.lastSyncTime
+      ? new Date(syncStatus.lastSyncTime).toLocaleString()
+      : 'Never';
+
     statusElement.innerHTML = `
       <div class="status-item">
         <strong>State:</strong> 
@@ -337,7 +337,7 @@ class AdminDashboard {
     try {
       const limitInput = document.getElementById('queue-limit');
       const limit = parseInt(limitInput?.value || 50);
-      
+
       const requests = await window.offlineInterceptor.getQueuedRequests(limit);
       this.displayQueueRequests(requests);
     } catch (error) {
@@ -359,7 +359,9 @@ class AdminDashboard {
       return;
     }
 
-    const requestHtml = requests.map(request => `
+    const requestHtml = requests
+      .map(
+        (request) => `
       <div class="request-item">
         <div class="request-header">
           <span class="method method-${request.method}">${request.method}</span>
@@ -383,7 +385,9 @@ class AdminDashboard {
                   class="btn btn-sm btn-danger">Remove</button>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
     queueElement.innerHTML = requestHtml;
   }
@@ -410,7 +414,7 @@ class AdminDashboard {
     try {
       const limitInput = document.getElementById('conflict-limit');
       const limit = parseInt(limitInput?.value || 50);
-      
+
       const conflicts = await window.offlineInterceptor.getPendingConflicts(limit);
       this.displayConflicts(conflicts);
     } catch (error) {
@@ -432,7 +436,9 @@ class AdminDashboard {
       return;
     }
 
-    const conflictHtml = conflicts.map(conflict => `
+    const conflictHtml = conflicts
+      .map(
+        (conflict) => `
       <div class="conflict-item">
         <div class="conflict-header">
           <span class="resource-type">${conflict.resource_type}</span>
@@ -446,12 +452,16 @@ class AdminDashboard {
           <div class="detail-row">
             <strong>Status:</strong> ${conflict.resolution_status}
           </div>
-          ${conflict.server_data ? `
+          ${
+  conflict.server_data
+    ? `
             <div class="data-comparison">
               <strong>Server Data:</strong>
               <pre>${JSON.stringify(JSON.parse(conflict.server_data), null, 2)}</pre>
             </div>
-          ` : ''}
+          `
+    : ''
+}
         </div>
         <div class="conflict-actions">
           <button onclick="adminDashboard.resolveConflict('${conflict.id}', 'local_wins')" 
@@ -462,7 +472,9 @@ class AdminDashboard {
                   class="btn btn-sm btn-warning">Skip</button>
         </div>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
     conflictsElement.innerHTML = conflictHtml;
   }
@@ -517,22 +529,23 @@ class AdminDashboard {
    */
   async clearOldRequests() {
     try {
-      const daysInput = this.currentTab === 'queue' ? 
-        document.getElementById('queue-limit') : 
-        document.getElementById('conflict-limit');
+      const daysInput =
+        this.currentTab === 'queue'
+          ? document.getElementById('queue-limit')
+          : document.getElementById('conflict-limit');
       const days = daysInput ? parseInt(daysInput.value) : 7;
-      
+
       await window.offlineInterceptor.clearOldRequests(days);
       this.showSuccess(`Cleared requests older than ${days} days`);
-      
+
       // Refresh current tab
       switch (this.currentTab) {
-        case 'queue':
-          this.refreshQueue();
-          break;
-        case 'conflicts':
-          this.refreshConflicts();
-          break;
+      case 'queue':
+        this.refreshQueue();
+        break;
+      case 'conflicts':
+        this.refreshConflicts();
+        break;
       }
     } catch (error) {
       console.error('Failed to clear old requests:', error);
@@ -547,7 +560,7 @@ class AdminDashboard {
     try {
       const tokenInput = document.getElementById('api-token');
       const secretInput = document.getElementById('api-secret');
-      
+
       const token = tokenInput?.value || '';
       const secret = secretInput?.value || '';
 
@@ -558,7 +571,7 @@ class AdminDashboard {
 
       await window.offlineInterceptor.setCredentials(token, secret);
       this.showSuccess('Credentials saved successfully');
-      
+
       // Clear inputs for security
       if (tokenInput) tokenInput.value = '';
       if (secretInput) secretInput.value = '';
@@ -588,15 +601,15 @@ class AdminDashboard {
     this.refreshInterval = setInterval(() => {
       if (this.isVisible) {
         switch (this.currentTab) {
-          case 'status':
-            this.updateStatus();
-            break;
-          case 'queue':
-            this.refreshQueue();
-            break;
-          case 'conflicts':
-            this.refreshConflicts();
-            break;
+        case 'status':
+          this.updateStatus();
+          break;
+        case 'queue':
+          this.refreshQueue();
+          break;
+        case 'conflicts':
+          this.refreshConflicts();
+          break;
         }
       }
     }, 10000); // Refresh every 10 seconds
@@ -671,7 +684,7 @@ class AdminDashboard {
    */
   destroy() {
     this.stopAutoRefresh();
-    
+
     // Remove event listeners
     document.removeEventListener('keydown', this.keydownHandler);
   }
@@ -682,7 +695,7 @@ let adminDashboard;
 
 document.addEventListener('DOMContentLoaded', () => {
   adminDashboard = new AdminDashboard();
-  
+
   // Make it globally accessible for debugging
   window.adminDashboard = adminDashboard;
 });
