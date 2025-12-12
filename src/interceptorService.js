@@ -1,7 +1,8 @@
 import { offlineQueueManager } from './offlineQueueManager.js';
 import { httpInterceptor } from './httpInterceptor.js';
 import { credentialStore } from './credentialStore.js';
-import { requestProcessor } from './requestProcessor.js';
+import { syncEngine } from './syncEngine.js';
+import { conflictResolver } from './conflictResolver.js';
 import { logger } from './logger.js';
 
 const MODULE = 'InterceptorService';
@@ -9,6 +10,8 @@ const MODULE = 'InterceptorService';
 class InterceptorService {
   constructor() {
     this.initialized = false;
+    this.syncStateListeners = [];
+    this.syncProgressListeners = [];
   }
 
   initialize() {
@@ -22,7 +25,7 @@ class InterceptorService {
         return false;
       }
 
-      requestProcessor.start();
+      syncEngine.start();
       this.initialized = true;
 
       logger.info(MODULE, 'Interceptor service initialized successfully');
@@ -33,9 +36,9 @@ class InterceptorService {
     }
   }
 
-  shutdown() {
+  async shutdown() {
     try {
-      requestProcessor.stop();
+      await syncEngine.safeShutdown();
       offlineQueueManager.close();
       this.initialized = false;
       logger.info(MODULE, 'Interceptor service shut down');
@@ -48,7 +51,7 @@ class InterceptorService {
     httpInterceptor.setOnlineStatus(isOnline);
 
     if (isOnline) {
-      requestProcessor.processQueue();
+      syncEngine.forceSync();
     }
   }
 
@@ -78,7 +81,7 @@ class InterceptorService {
   }
 
   getQueueStatus() {
-    return requestProcessor.getQueueStatus();
+    return offlineQueueManager.getQueueStats();
   }
 
   getQueuedRequests(limit = 50) {
@@ -91,6 +94,46 @@ class InterceptorService {
 
   clearOldRequests(days = 7) {
     return offlineQueueManager.clearOldRequests(days);
+  }
+
+  getSyncStatus() {
+    return syncEngine.getSyncStatus();
+  }
+
+  forceSync() {
+    syncEngine.forceSync();
+  }
+
+  registerConflictHook(resourceType, hookFn) {
+    return conflictResolver.registerResolutionHook(resourceType, hookFn);
+  }
+
+  unregisterConflictHook(resourceType) {
+    return conflictResolver.unregisterResolutionHook(resourceType);
+  }
+
+  getPendingConflicts(limit = 50) {
+    return conflictResolver.getPendingConflicts(limit);
+  }
+
+  resolveConflict(conflictId, resolution) {
+    return conflictResolver.resolveConflictManually(conflictId, resolution);
+  }
+
+  onSyncStateChanged(callback) {
+    syncEngine.on('sync-state-changed', callback);
+  }
+
+  onSyncProgress(callback) {
+    syncEngine.on('sync-progress', callback);
+  }
+
+  offSyncStateChanged(callback) {
+    syncEngine.off('sync-state-changed', callback);
+  }
+
+  offSyncProgress(callback) {
+    syncEngine.off('sync-progress', callback);
   }
 }
 

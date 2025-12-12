@@ -46,11 +46,24 @@ function createWindow() {
 
 app.on('ready', () => {
   interceptorService.initialize();
+  
+  interceptorService.onSyncStateChanged((data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sync-state-changed', data);
+    }
+  });
+
+  interceptorService.onSyncProgress((data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sync-progress', data);
+    }
+  });
+
   createWindow();
 });
 
-app.on('window-all-closed', () => {
-  interceptorService.shutdown();
+app.on('window-all-closed', async () => {
+  await interceptorService.shutdown();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -152,6 +165,53 @@ ipcMain.handle('interceptor-clear-old-requests', async (event, days = 7) => {
     return { success: result };
   } catch (error) {
     logger.error('IPC', 'Failed to clear old requests', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-get-sync-status', async () => {
+  try {
+    return interceptorService.getSyncStatus();
+  } catch (error) {
+    logger.error('IPC', 'Failed to get sync status', { error: error.message });
+    return {
+      state: 'idle',
+      isProcessing: false,
+      lastSyncTime: null,
+      stats: { successCount: 0, failureCount: 0, conflictCount: 0 },
+      queueStats: { pending: 0, completed: 0, failed: 0, total: 0 },
+      pendingConflicts: 0,
+    };
+  }
+});
+
+ipcMain.handle('interceptor-force-sync', async () => {
+  try {
+    interceptorService.forceSync();
+    logger.info('IPC', 'Force sync triggered');
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Failed to force sync', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-get-pending-conflicts', async (event, limit = 50) => {
+  try {
+    return interceptorService.getPendingConflicts(limit);
+  } catch (error) {
+    logger.error('IPC', 'Failed to get pending conflicts', { error: error.message });
+    return [];
+  }
+});
+
+ipcMain.handle('interceptor-resolve-conflict', async (event, conflictId, resolution) => {
+  try {
+    const result = interceptorService.resolveConflict(conflictId, resolution);
+    logger.info('IPC', 'Conflict resolved', { conflictId, resolution });
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to resolve conflict', { error: error.message });
     return { success: false, error: error.message };
   }
 });
