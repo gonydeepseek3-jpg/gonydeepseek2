@@ -58,34 +58,43 @@ async function initializePOSAwesome(config) {
     throw new Error('POSAwesome container not found');
   }
 
-  // Create an iframe to load ERPNext POSAwesome
-  const iframe = document.createElement('iframe');
-  iframe.id = 'posawsome-iframe';
-  iframe.style.width = '100%';
-  iframe.style.height = '100%';
-  iframe.style.border = 'none';
+  // Create a webview so we can inject a guest preload that intercepts API calls
+  const webview = document.createElement('webview');
+  webview.id = 'posawsome-webview';
+  webview.style.width = '100%';
+  webview.style.height = '100%';
+  webview.style.border = 'none';
 
   // Construct the URL for ERPNext POSAwesome
   const erpNextBaseUrl = config.erpNextBaseUrl.replace(/\/$/, '');
   const posAwesomeUrl = `${erpNextBaseUrl}/app/pos`;
 
-  iframe.src = posAwesomeUrl;
+  webview.src = posAwesomeUrl;
 
-  // Handle iframe load events
-  iframe.onload = () => {
+  try {
+    const preloadPath = await window.electronAPI.getWebviewPreloadPath();
+    if (preloadPath) {
+      webview.preload = preloadPath;
+    }
+  } catch (error) {
+    console.warn('Failed to set webview preload path:', error);
+  }
+
+  // Handle webview load events
+  webview.addEventListener('did-finish-load', () => {
     updateStatus('POSAwesome loaded successfully');
     console.log('POSAwesome interface loaded');
-  };
+  });
 
-  iframe.onerror = () => {
+  webview.addEventListener('did-fail-load', (event) => {
     updateStatus(
       `Failed to load POSAwesome from ${posAwesomeUrl}. Check your ERPNEXT_BASE_URL configuration.`,
       'error'
     );
-    console.error(`Failed to load POSAwesome from ${posAwesomeUrl}`);
-  };
+    console.error('Failed to load POSAwesome', event);
+  });
 
-  container.appendChild(iframe);
+  container.appendChild(webview);
 }
 
 /**

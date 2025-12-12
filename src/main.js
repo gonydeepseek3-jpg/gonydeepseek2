@@ -25,13 +25,16 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      sandbox: true,
+      webviewTag: true,
+      sandbox: false,
     },
   });
 
-  const startUrl = isDevelopment
-    ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, 'renderer', 'index.html')}`;
+  const devServerUrl = process.env.ELECTRON_START_URL;
+  const startUrl =
+    isDevelopment && devServerUrl
+      ? devServerUrl
+      : `file://${path.join(__dirname, 'renderer', 'index.html')}`;
 
   mainWindow.loadURL(startUrl);
 
@@ -129,12 +132,59 @@ ipcMain.handle('interceptor-get-queue-status', async () => {
   }
 });
 
-ipcMain.handle('interceptor-get-queued-requests', async (event, limit = 50) => {
+ipcMain.handle('interceptor-get-queued-requests', async (event, limit = 50, status = null) => {
   try {
-    return interceptorService.getQueuedRequests(limit);
+    return interceptorService.getQueuedRequests(limit, status);
   } catch (error) {
     logger.error('IPC', 'Failed to get queued requests', { error: error.message });
     return [];
+  }
+});
+
+ipcMain.handle('interceptor-retry-request', async (event, id, options = {}) => {
+  try {
+    const result = interceptorService.retryRequest(id, options);
+    return { success: result };
+  } catch (error) {
+    logger.error('IPC', 'Failed to retry request', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('interceptor-get-online-status', async () => {
+  try {
+    return { isOnline: interceptorService.getOnlineStatus() };
+  } catch (error) {
+    logger.error('IPC', 'Failed to get online status', { error: error.message });
+    return { isOnline: true };
+  }
+});
+
+ipcMain.handle('interceptor-get-sync-log', async (event, limit = 100) => {
+  try {
+    return interceptorService.getSyncLog(limit);
+  } catch (error) {
+    logger.error('IPC', 'Failed to get sync log', { error: error.message });
+    return [];
+  }
+});
+
+ipcMain.handle('interceptor-execute-request', async (event, method, url, options = {}) => {
+  try {
+    return await interceptorService.interceptRequest(method, url, options);
+  } catch (error) {
+    logger.error('IPC', 'Failed to execute intercepted request', { error: error.message, method, url });
+    return { ok: false, status: 500, data: { message: error.message } };
+  }
+});
+
+ipcMain.handle('interceptor-cache-response', async (event, method, url, body, responseData) => {
+  try {
+    const success = interceptorService.cacheResponse(method, url, body, responseData);
+    return { success };
+  } catch (error) {
+    logger.error('IPC', 'Failed to cache response', { error: error.message, method, url });
+    return { success: false, error: error.message };
   }
 });
 

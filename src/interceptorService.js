@@ -80,12 +80,33 @@ class InterceptorService {
     return credentialStore.clearCredentials();
   }
 
+  getOnlineStatus() {
+    return httpInterceptor.isOnline;
+  }
+
   getQueueStatus() {
     return offlineQueueManager.getQueueStats();
   }
 
-  getQueuedRequests(limit = 50) {
-    return offlineQueueManager.getQueuedRequests(limit);
+  getQueuedRequests(limit = 50, status = null) {
+    return offlineQueueManager.getQueuedRequests(limit, status);
+  }
+
+  retryRequest(id, options = {}) {
+    const result = offlineQueueManager.retryRequest(id, options);
+    if (result) {
+      syncEngine.forceSync();
+    }
+    return result;
+  }
+
+  getSyncLog(limit = 100) {
+    return offlineQueueManager.getSyncLog(limit);
+  }
+
+  cacheResponse(method, url, body, responseData) {
+    const requestHash = offlineQueueManager.generateRequestHash(method, url, body);
+    return offlineQueueManager.cacheResponse(requestHash, responseData);
   }
 
   removeRequest(id) {

@@ -1,4 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const webviewPreloadPath = path.join(__dirname, 'webviewPreload.js');
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -8,6 +13,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Get application version
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // Absolute path to the webview preload script (used to intercept POSAwesome API calls)
+  getWebviewPreloadPath: () => webviewPreloadPath,
 
   // Send message to main process
   send: (channel, args) => {
@@ -47,9 +55,16 @@ contextBridge.exposeInMainWorld('offlineInterceptor', {
   // Queue management
   getQueueStatus: () => ipcRenderer.invoke('interceptor-get-queue-status'),
 
-  getQueuedRequests: (limit = 50) => ipcRenderer.invoke('interceptor-get-queued-requests', limit),
+  getQueuedRequests: (limit = 50, status = null) =>
+    ipcRenderer.invoke('interceptor-get-queued-requests', limit, status),
+
+  retryRequest: (id, options = {}) => ipcRenderer.invoke('interceptor-retry-request', id, options),
 
   removeRequest: (id) => ipcRenderer.invoke('interceptor-remove-request', id),
+
+  getOnlineStatus: () => ipcRenderer.invoke('interceptor-get-online-status'),
+
+  getSyncLog: (limit = 100) => ipcRenderer.invoke('interceptor-get-sync-log', limit),
 
   // Online/offline status
   setOnlineStatus: (isOnline) => ipcRenderer.invoke('interceptor-set-online-status', isOnline),

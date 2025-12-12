@@ -18,7 +18,7 @@ class HTTPInterceptor {
 
   makeHttpRequest(url, options) {
     return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
+      const urlObj = new URL(url, this.baseUrl);
       const isHttps = urlObj.protocol === 'https:';
       const client = isHttps ? https : http;
 
@@ -124,18 +124,36 @@ class HTTPInterceptor {
         body: options.body,
       });
 
-      if (response.status >= 400) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      offlineQueueManager.cacheResponse(requestHash, response.body);
-      logger.debug(MODULE, 'Online request successful', { method, url });
-
-      return {
-        ok: true,
+      const normalized = {
+        ok: response.status < 400,
         status: response.status,
         data: response.body,
       };
+
+      if (normalized.ok) {
+        offlineQueueManager.cacheResponse(requestHash, response.body);
+        logger.debug(MODULE, 'Online request successful', { method, url });
+        return normalized;
+      }
+
+      // Conflicts should be handled by the sync engine (do NOT re-queue)
+      if ([409, 412].includes(response.status)) {
+        return normalized;
+      }
+
+      // For client errors, return as-is (do NOT re-queue)
+      if (response.status >= 400 && response.status < 500) {
+        return normalized;
+      }
+
+      // For server errors (or unknown), attempt offline fallback/queuing
+      logger.warn(MODULE, 'Online request returned server error, attempting offline handling', {
+        method,
+        url,
+        status: response.status,
+      });
+
+      return this.handleOfflineRequest(method, url, headers, options, requestHash);
     } catch (error) {
       logger.warn(MODULE, 'Online request failed, attempting offline handling', {
         method,

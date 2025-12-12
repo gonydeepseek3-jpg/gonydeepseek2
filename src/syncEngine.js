@@ -205,13 +205,22 @@ class SyncEngine extends EventEmitter {
 
       if (response.ok) {
         offlineQueueManager.updateRequestStatus(request.id, 'completed');
+        offlineQueueManager.addSyncLog(request.id, 'completed', 'Request synced successfully', {
+          status: response.status,
+        });
         logger.info(MODULE, 'Request synced successfully', { id: request.id });
         return { success: true };
       }
 
       const conflictResult = await conflictResolver.handleConflict(request, response);
-      
+
       if (conflictResult) {
+        offlineQueueManager.addSyncLog(request.id, 'conflict', 'Conflict detected', {
+          conflictId: conflictResult.conflictId,
+          resolution: conflictResult.resolution,
+          status: response.status,
+        });
+
         logger.info(MODULE, 'Conflict detected and handled', {
           requestId: request.id,
           conflictId: conflictResult.conflictId,
@@ -221,11 +230,12 @@ class SyncEngine extends EventEmitter {
       }
 
       if (request.retry_count >= this.maxRetries) {
-        offlineQueueManager.updateRequestStatus(
-          request.id,
-          'failed',
-          `Max retries exceeded. Last status: ${response.status}`
-        );
+        const errorMessage = `Max retries exceeded. Last status: ${response.status}`;
+        offlineQueueManager.updateRequestStatus(request.id, 'failed', errorMessage);
+        offlineQueueManager.addSyncLog(request.id, 'failed', errorMessage, {
+          status: response.status,
+          retryCount: request.retry_count,
+        });
         logger.warn(MODULE, 'Request failed after max retries', { id: request.id });
         return { success: false };
       }
@@ -233,7 +243,13 @@ class SyncEngine extends EventEmitter {
       const retryDelay = this.calculateRetryDelay(request.retry_count);
       offlineQueueManager.incrementRetryCount(request.id);
       offlineQueueManager.setNextRetryTime(request.id, retryDelay);
-      
+
+      offlineQueueManager.addSyncLog(request.id, 'retry_scheduled', 'Retry scheduled', {
+        retryCount: request.retry_count + 1,
+        nextRetryInMs: retryDelay,
+        status: response.status,
+      });
+
       logger.info(MODULE, 'Request will be retried', {
         id: request.id,
         retryCount: request.retry_count + 1,
@@ -249,12 +265,20 @@ class SyncEngine extends EventEmitter {
 
       if (request.retry_count >= this.maxRetries) {
         offlineQueueManager.updateRequestStatus(request.id, 'failed', error.message);
+        offlineQueueManager.addSyncLog(request.id, 'failed', error.message, {
+          retryCount: request.retry_count,
+        });
         return { success: false };
       }
 
       const retryDelay = this.calculateRetryDelay(request.retry_count);
       offlineQueueManager.incrementRetryCount(request.id);
       offlineQueueManager.setNextRetryTime(request.id, retryDelay);
+      offlineQueueManager.addSyncLog(request.id, 'retry_scheduled', 'Retry scheduled after error', {
+        retryCount: request.retry_count + 1,
+        nextRetryInMs: retryDelay,
+        error: error.message,
+      });
 
       return { success: false };
     }
