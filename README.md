@@ -33,7 +33,8 @@ posawsome-desktop/
 │   ├── credentialStore.js               # Secure credential storage
 │   ├── offlineQueueManager.js           # SQLite offline queue
 │   ├── httpInterceptor.js               # HTTP request interception
-│   ├── requestProcessor.js              # Offline queue processor
+│   ├── syncEngine.js                    # Background sync service
+│   ├── conflictResolver.js              # Conflict detection & resolution
 │   ├── interceptorService.js            # Offline service orchestrator
 │   ├── renderer/
 │   │   ├── index.html                   # Main renderer HTML
@@ -42,12 +43,15 @@ posawsome-desktop/
 │   │   └── js/
 │   │       ├── app.js                   # Renderer process JavaScript
 │   │       └── offline-interceptor-example.js # Usage example
-│   └── __tests__/                       # Unit tests
+│   └── __tests__/                       # Unit and integration tests
 │       ├── logger.test.js
 │       ├── credentialStore.test.js
 │       ├── offlineQueueManager.test.js
 │       ├── httpInterceptor.test.js
-│       └── interceptorService.test.js
+│       ├── interceptorService.test.js
+│       ├── syncEngine.test.js
+│       ├── conflictResolver.test.js
+│       └── syncWorkflow.test.js
 │
 ├── package.json                         # Project dependencies and scripts
 ├── vitest.config.js                     # Vitest configuration
@@ -57,6 +61,7 @@ posawsome-desktop/
 ├── .prettierrc                          # Prettier code formatting config
 ├── .gitignore                           # Git ignore rules
 ├── OFFLINE_INTERCEPTOR.md               # Offline interceptor documentation
+├── SYNC_ENGINE.md                       # Sync engine & conflict resolution docs
 └── README.md                            # This file
 ```
 
@@ -183,6 +188,11 @@ All configuration is managed through environment variables in the `.env` file:
 | `SYNC_INTERVAL` | Number | `60000` | Interval (ms) for backend sync operations |
 | `NODE_ENV` | String | `development` | Application environment mode |
 | `DEBUG` | Boolean | `false` | Enable verbose debugging output |
+| `PROCESSING_INTERVAL` | Number | `5000` | Queue processing interval (ms) |
+| `MAX_RETRIES` | Number | `3` | Maximum retry attempts for failed requests |
+| `BASE_RETRY_DELAY` | Number | `1000` | Base delay for exponential backoff (ms) |
+| `MAX_RETRY_DELAY` | Number | `300000` | Maximum retry delay cap (ms) |
+| `SYNC_BATCH_SIZE` | Number | `10` | Number of requests per sync batch |
 
 ## Architecture
 
@@ -216,11 +226,12 @@ The offline interceptor service provides transparent HTTP request interception:
 - **HTTPInterceptor** (`src/httpInterceptor.js`): Core request interception and routing
 - **OfflineQueueManager** (`src/offlineQueueManager.js`): SQLite-based persistence and request queuing
 - **CredentialStore** (`src/credentialStore.js`): Secure credential storage with AES encryption
-- **RequestProcessor** (`src/requestProcessor.js`): Periodic queue processing when online
+- **SyncEngine** (`src/syncEngine.js`): Background sync with exponential backoff
+- **ConflictResolver** (`src/conflictResolver.js`): Conflict detection and resolution
 - **Logger** (`src/logger.js`): Comprehensive logging system
 - **InterceptorService** (`src/interceptorService.js`): Service orchestration and IPC handlers
 
-See [OFFLINE_INTERCEPTOR.md](./OFFLINE_INTERCEPTOR.md) for detailed documentation.
+See [OFFLINE_INTERCEPTOR.md](./OFFLINE_INTERCEPTOR.md) and [SYNC_ENGINE.md](./SYNC_ENGINE.md) for detailed documentation.
 
 ## Features
 
@@ -247,7 +258,17 @@ See [OFFLINE_INTERCEPTOR.md](./OFFLINE_INTERCEPTOR.md) for detailed documentatio
   - [x] Retry logic with configurable max retries
   - [x] IPC APIs for queue monitoring and control
   - [x] Comprehensive logging system
-  - [x] Unit tests with Vitest (24 tests)
+  - [x] Unit tests with Vitest (88 tests)
+- [x] **Sync Engine & Conflict Resolution**
+  - [x] Background sync service with state management
+  - [x] Exponential backoff retry logic with jitter
+  - [x] Last-write-wins conflict resolution
+  - [x] Custom conflict resolution hooks
+  - [x] Conflict tracking in database
+  - [x] Sync status broadcasting via IPC events
+  - [x] Safe shutdown with graceful completion
+  - [x] Resume after extended offline periods
+  - [x] Integration tests for retry and conflict workflows
 
 ### 🔮 Future Enhancements
 
@@ -258,7 +279,8 @@ See [OFFLINE_INTERCEPTOR.md](./OFFLINE_INTERCEPTOR.md) for detailed documentatio
 - [ ] Advanced error handling and recovery
 - [ ] Application telemetry and analytics
 - [ ] Request compression for offline storage
-- [ ] Conflict resolution for concurrent updates
+- [ ] Priority queue for critical requests
+- [ ] Sync scheduling with user-defined windows
 
 ## Debugging
 

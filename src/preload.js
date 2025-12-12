@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Listen for messages from main process
   on: (channel, callback) => {
-    const validChannels = ['config-updated'];
+    const validChannels = ['config-updated', 'sync-state-changed', 'sync-progress'];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Remove listener
   removeAllListeners: (channel) => {
-    const validChannels = ['config-updated'];
+    const validChannels = ['config-updated', 'sync-state-changed', 'sync-progress'];
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
     }
@@ -56,4 +56,16 @@ contextBridge.exposeInMainWorld('offlineInterceptor', {
 
   // Maintenance
   clearOldRequests: (days = 7) => ipcRenderer.invoke('interceptor-clear-old-requests', days),
+
+  // Sync management
+  getSyncStatus: () => ipcRenderer.invoke('interceptor-get-sync-status'),
+
+  forceSync: () => ipcRenderer.invoke('interceptor-force-sync'),
+
+  // Conflict management
+  getPendingConflicts: (limit = 50) =>
+    ipcRenderer.invoke('interceptor-get-pending-conflicts', limit),
+
+  resolveConflict: (conflictId, resolution) =>
+    ipcRenderer.invoke('interceptor-resolve-conflict', conflictId, resolution),
 });
