@@ -1,6 +1,6 @@
 # POSAwesome Desktop Application
 
-A modern Electron-based desktop application for running ERPNext POSAwesome (Point of Sale) locally with offline support and enhanced performance.
+A modern Electron-based desktop application for running ERPNext POSAwesome (Point of Sale) locally with comprehensive offline support, sync management, and built-in admin dashboard.
 
 ## Overview
 
@@ -9,11 +9,24 @@ POSAwesome Desktop provides a native desktop experience for ERPNext POS operatio
 - **Local execution** of the ERPNext POSAwesome interface via Electron
 - **Secure IPC communication** between main and renderer processes
 - **Environment-based configuration** for ERPNext connectivity
-- **Offline mode support** with automatic request queuing and synchronization
-- **Automatic synchronization** with ERPNext backend
+- **Comprehensive offline mode support** with automatic request queuing and synchronization
+- **Automatic synchronization** with ERPNext backend with conflict resolution
+- **Built-in Admin Dashboard** for real-time monitoring and manual intervention
 - **Secure credential storage** with AES encryption
 - **SQLite-based offline request persistence** for seamless online/offline transitions
-- **Foundation for future Vue-based admin panels** and customizations
+- **Lightweight vanilla JavaScript admin panel** with keyboard shortcuts and menu access
+
+### 🆕 Admin Dashboard Features
+
+The built-in admin dashboard provides comprehensive monitoring and control:
+
+- **Sync Status Monitoring**: Real-time sync state, statistics, and last sync times
+- **Queue Management**: View and manage queued requests with retry capabilities
+- **Conflict Resolution**: Manual resolution interface for data conflicts
+- **Credential Management**: Secure API token/secret storage interface
+- **Maintenance Tools**: Clear old requests, force sync, toggle online status
+- **Keyboard Shortcuts**: Press `Ctrl+Shift+A` to toggle the dashboard
+- **Menu Integration**: Access via View → Admin Dashboard in the application menu
 
 ## System Requirements
 
@@ -39,9 +52,10 @@ posawsome-desktop/
 │   ├── renderer/
 │   │   ├── index.html                   # Main renderer HTML
 │   │   ├── styles/
-│   │   │   └── main.css                 # Application styling
+│   │   │   └── main.css                 # Application styling + admin dashboard
 │   │   └── js/
 │   │       ├── app.js                   # Renderer process JavaScript
+│   │       ├── admin.js                 # Admin dashboard module
 │   │       └── offline-interceptor-example.js # Usage example
 │   └── __tests__/                       # Unit and integration tests
 │       ├── logger.test.js
@@ -116,6 +130,7 @@ This will:
 - Start the Electron application
 - Open DevTools for debugging
 - Enable hot-reload functionality (with proper setup)
+- Enable detailed logging for troubleshooting
 
 #### Production Mode
 
@@ -124,6 +139,45 @@ Run the application in production mode:
 ```bash
 npm start
 ```
+
+### 4. Admin Dashboard
+
+The Admin Dashboard provides comprehensive monitoring and control of the offline synchronization system. Access it using one of these methods:
+
+- **Keyboard Shortcut**: Press `Ctrl+Shift+A` anytime
+- **Application Menu**: View → Admin Dashboard
+- **Status Bar**: Click the hint in the status bar
+
+#### Dashboard Tabs
+
+**Sync Status Tab**
+- Real-time sync state (idle/syncing/failed)
+- Last sync timestamp
+- Sync statistics (completed, failed, retry counts)
+- Force sync and online status toggle buttons
+
+**Queue Tab**
+- List of all queued requests with method, URL, status
+- Request details including creation time and retry count
+- Remove individual requests capability
+- Clear old requests functionality
+
+**Conflicts Tab**
+- Data conflicts requiring manual resolution
+- Local vs server data comparison
+- Resolution actions: Local Wins, Server Wins, Skip
+- Conflict details and timestamps
+
+**Settings Tab**
+- Secure credential storage interface
+- API token and secret management
+- Maintenance tools for database cleanup
+
+#### Dashboard Features
+- **Auto-refresh**: Updates every 10 seconds when visible
+- **Real-time updates**: Sync state changes appear immediately
+- **Notifications**: Success/error messages for all actions
+- **Responsive design**: Optimized for desktop monitoring
 
 ## Development Workflows
 
@@ -299,6 +353,48 @@ Access the renderer console through DevTools to view logs from the renderer proc
 
 Main process logs appear in the terminal/console where the application was launched.
 
+## Offline Workflow
+
+### How Offline Mode Works
+
+POSAwesome Desktop implements a comprehensive offline-first architecture:
+
+1. **Request Interception**: All HTTP requests to ERPNext are intercepted
+2. **Request Classification**:
+   - **GET/HEAD/OPTIONS**: Served from cache when offline
+   - **POST/PUT/DELETE**: Queued for sync when offline
+3. **Queue Processing**: Background sync service processes queued requests
+4. **Conflict Resolution**: Automatic LWW (Last-Write-Wins) with manual override
+5. **State Persistence**: All data stored in SQLite database for resilience
+
+### Online/Offline Transitions
+
+**Going Offline**:
+- New POST/PUT/DELETE requests are queued
+- GET requests serve from cached responses
+- Visual indicators show offline status
+- Automatic sync attempts continue in background
+
+**Going Online**:
+- Queued requests are processed immediately
+- Conflicts are detected and logged
+- Cache is updated with fresh data
+- Sync status broadcasts to admin dashboard
+
+### Data Consistency
+
+- **Request Deduplication**: SHA256 hashing prevents duplicate submissions
+- **Retry Logic**: Exponential backoff with configurable attempts (default: 3)
+- **Batch Processing**: Requests processed in configurable batches (default: 10)
+- **Graceful Degradation**: System continues operating during extended offline periods
+
+### Sync Engine Behavior
+
+- **Processing Interval**: Checks queue every 5 seconds (configurable)
+- **Exponential Backoff**: 1s base delay, max 5 minutes with jitter
+- **State Management**: idle → syncing → idle/failed transitions
+- **Metadata Tracking**: Last sync time and statistics persisted
+
 ## Troubleshooting
 
 ### ERPNext Connection Issues
@@ -310,28 +406,224 @@ Main process logs appear in the terminal/console where the application was launc
 2. Check `ERPNEXT_BASE_URL` in `.env`
 3. Ensure CORS is properly configured if remote
 4. Check browser console for specific errors
+5. Test connectivity: `curl -I your_erpnext_url`
 
-### Module Not Found Errors
+### Admin Dashboard Issues
+
+**Problem**: Admin dashboard doesn't open with `Ctrl+Shift+A`
+
+**Solution**:
+1. Check browser console for JavaScript errors
+2. Verify DevTools are working (development mode)
+3. Try menu: View → Admin Dashboard
+4. Check if preload script is loading correctly
+
+**Problem**: Dashboard shows loading but no data
+
+**Solution**:
+1. Check main process logs for IPC errors
+2. Verify offline interceptor service is initialized
+3. Test IPC connectivity: Check DevTools console
+4. Restart application if service failed to start
+
+### Sync and Queue Issues
+
+**Problem**: Requests stuck in queue indefinitely
+
+**Solution**:
+1. Open Admin Dashboard → Queue tab
+2. Check for failed requests with error messages
+3. Use "Force Sync" button in Sync Status tab
+4. Verify ERPNext connectivity and credentials
+5. Check logs: `%USERPROFILE%\AppData\Roaming\POSAwesome\logs\app.log`
+
+**Problem**: Too many conflicts appearing
+
+**Solution**:
+1. Review conflict patterns in Admin Dashboard → Conflicts tab
+2. Consider adjusting sync intervals
+3. Implement custom conflict resolution hooks
+4. Check for concurrent users editing same data
+
+### Offline Cache Issues
+
+**Problem**: Stale data being served offline
+
+**Solution**:
+1. Use Admin Dashboard → Settings → Clear Old Requests
+2. Adjust cache expiry policies
+3. Force sync when coming back online
+4. Manually clear cache via Settings tab
+
+### Module and Dependency Issues
+
+**Problem**: Module not found errors during development
 
 **Solution**:
 ```bash
-# Reinstall dependencies
+# Clean install dependencies
 rm -rf node_modules package-lock.json
 npm install
+
+# Rebuild native modules (Windows)
+npm rebuild
+
+# Clear Electron cache
+# Delete: %USERPROFILE%\AppData\Roaming\POSAwesome\Cache
 ```
 
-### Port Already in Use
+### Port and Network Issues
+
+**Problem**: Port conflicts or network timeouts
 
 **Solution**:
 ```bash
-# Kill process using the port (Windows)
-netstat -ano | findstr :PORT
+# Windows: Check port usage
+netstat -ano | findstr :8000
 taskkill /PID <PID> /F
 
-# Or use a different port configuration
+# Test ERPNext connectivity
+curl -I http://your-erpnext-url/api/method/frappe.client.get_user
+
+# Check Windows Firewall settings
+# Ensure ERPNext URL is whitelisted
+```
+
+### Windows Development and Testing
+
+#### Prerequisites for Windows Development
+
+1. **Node.js**: Download from nodejs.org (LTS recommended)
+2. **Git**: Git for Windows with Git Bash
+3. **Visual Studio Build Tools**: For native module compilation
+4. **Windows Terminal**: Enhanced command line experience
+
+#### Development Setup on Windows
+
+```powershell
+# Clone repository
+git clone <repository-url>
+cd posawsome-desktop
+
+# Install dependencies
+npm install
+
+# Start development mode
+npm run dev
+```
+
+#### Testing Windows Builds
+
+```powershell
+# Build Windows installer and portable
+npm run build
+
+# Test installer
+# Located in dist/ directory
+
+# Test portable version
+# Run POSAwesome-0.1.0.exe directly
+
+# Check build integrity
+Get-FileHash dist\POSAwesome-Setup-0.1.0.exe
+```
+
+#### Windows-Specific Issues
+
+**Problem**: Electron app won't start on Windows
+
+**Solutions**:
+1. Run as Administrator
+2. Check Windows Defender exclusions
+3. Verify Visual C++ Redistributable installed
+4. Check Windows version compatibility (Windows 7+)
+
+**Problem**: Database permission errors
+
+**Solution**:
+```powershell
+# Fix SQLite database permissions
+# Location: %USERPROFILE%\AppData\Roaming\POSAwesome\
+icacls offline-queue.db /grant Users:F
+```
+
+**Problem**: Credential storage errors
+
+**Solution**:
+1. Check Windows Data Protection API availability
+2. Verify user profile integrity
+3. Run as current user, not system account
+4. Clear credential store via Admin Dashboard → Settings
+
+#### Windows Performance Considerations
+
+- **SQLite Performance**: Use SSD storage for better database performance
+- **Memory Usage**: Monitor with Task Manager for memory leaks
+- **Background Processes**: Sync engine runs continuously, check resource usage
+- **Firewall**: Configure Windows Firewall for ERPNext connectivity
+
+#### Windows Deployment
+
+```powershell
+# Sign application (requires code signing certificate)
+# Add to build configuration in package.json
+
+# Create installer
+npm run build
+
+# Test on clean Windows VM
+# Verify all functionality works end-to-end
 ```
 
 ## Security Considerations
+
+### API Token Storage
+
+**⚠️ IMPORTANT SECURITY GUIDELINES**:
+
+- **Never commit `.env` files** to version control
+- **Use environment variables** for production deployments
+- **Encrypt sensitive data** in configuration files
+- **Rotate API credentials** regularly
+- **Limit API permissions** to minimum required scope
+
+### Credential Security Features
+
+- **AES-256 Encryption**: API credentials encrypted with machine-derived key
+- **Memory Protection**: Credentials cleared from memory after use
+- **No Logging**: Sensitive data never logged to files
+- **Secure IPC**: Only whitelisted channels for credential operations
+
+### Environment Security
+
+```bash
+# Production environment variables
+ERPNEXT_BASE_URL=https://your-production-erpnext.com
+ERPNEXT_API_TOKEN=your_production_token
+ERPNEXT_API_SECRET=your_production_secret
+
+# Development environment (use test credentials)
+NODE_ENV=development
+DEBUG=true
+```
+
+### Additional Security Measures
+
+1. **Network Security**: Use HTTPS for all ERPNext connections
+2. **Certificate Validation**: Verify SSL certificates in production
+3. **API Rate Limiting**: Implement rate limiting to prevent abuse
+4. **Access Logging**: Monitor API access patterns
+5. **Regular Updates**: Keep Electron and dependencies updated
+
+### Vulnerability Reporting
+
+For security-related issues:
+1. **DO NOT** create public GitHub issues
+2. **Email** security reports to: [security@posawsome.com]
+3. **Include** detailed reproduction steps
+4. **Allow** reasonable time for response before disclosure
+
+### Application Security
 
 - **Context Isolation**: Enabled to prevent direct access to Node.js APIs from renderer
 - **Sandbox**: Enabled for additional security layer
@@ -368,6 +660,11 @@ For issues, feature requests, or questions:
 - Environment-based configuration
 - Development and build tooling
 - Windows packaging support
+- **🆕 Comprehensive offline mode with SQLite persistence**
+- **🆕 Sync engine with exponential backoff and conflict resolution**
+- **🆕 Built-in admin dashboard for monitoring and control**
+- **🆕 88 comprehensive unit and integration tests**
+- **🆕 Enhanced documentation with Windows development guide**
 
 ---
 
