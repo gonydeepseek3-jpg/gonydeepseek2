@@ -10,7 +10,7 @@ window.electronAPI.on('sync-state-changed', (data) => {
   console.log('  - Failures:', data.stats.failureCount);
   console.log('  - Conflicts:', data.stats.conflictCount);
   console.log('  - Duration:', data.stats.lastSyncDuration, 'ms');
-  
+
   updateSyncUI(data);
 });
 
@@ -18,8 +18,10 @@ window.electronAPI.on('sync-state-changed', (data) => {
 window.electronAPI.on('sync-progress', (data) => {
   console.log('=== Sync Progress ===');
   console.log(`Processing: ${data.processed}/${data.total}`);
-  console.log(`Success: ${data.successCount}, Failed: ${data.failureCount}, Conflicts: ${data.conflictCount}`);
-  
+  console.log(
+    `Success: ${data.successCount}, Failed: ${data.failureCount}, Conflicts: ${data.conflictCount}`
+  );
+
   updateProgressUI(data);
 });
 
@@ -56,7 +58,7 @@ async function getPendingConflicts() {
     const conflicts = await window.offlineInterceptor.getPendingConflicts(20);
     console.log('=== Pending Conflicts ===');
     console.log(`Found ${conflicts.length} conflicts`);
-    
+
     conflicts.forEach((conflict, index) => {
       console.log(`\nConflict ${index + 1}:`);
       console.log('  ID:', conflict.id);
@@ -67,7 +69,7 @@ async function getPendingConflicts() {
       console.log('  Server Version:', conflict.server_version);
       console.log('  Created:', conflict.created_at);
     });
-    
+
     return conflicts;
   } catch (error) {
     console.error('Failed to get pending conflicts:', error);
@@ -79,13 +81,13 @@ async function resolveConflict(conflictId, resolution) {
   try {
     console.log(`Resolving conflict ${conflictId} with: ${resolution}`);
     const result = await window.offlineInterceptor.resolveConflict(conflictId, resolution);
-    
+
     if (result.success) {
       console.log('Conflict resolved successfully');
     } else {
       console.error('Failed to resolve conflict:', result.error);
     }
-    
+
     return result;
   } catch (error) {
     console.error('Error resolving conflict:', error);
@@ -96,12 +98,12 @@ async function resolveConflict(conflictId, resolution) {
 function updateSyncUI(data) {
   const stateElement = document.getElementById('sync-state');
   const statsElement = document.getElementById('sync-stats');
-  
+
   if (stateElement) {
     stateElement.textContent = data.state;
     stateElement.className = `sync-state sync-state-${data.state}`;
   }
-  
+
   if (statsElement) {
     statsElement.innerHTML = `
       <div>Success: ${data.stats.successCount}</div>
@@ -114,7 +116,7 @@ function updateSyncUI(data) {
 
 function updateProgressUI(data) {
   const progressElement = document.getElementById('sync-progress');
-  
+
   if (progressElement) {
     const percentage = (data.processed / data.total) * 100;
     progressElement.style.width = `${percentage}%`;
@@ -126,16 +128,16 @@ function updateProgressUI(data) {
 async function displayConflictsInUI() {
   const conflicts = await getPendingConflicts();
   const conflictsContainer = document.getElementById('conflicts-list');
-  
+
   if (!conflictsContainer) return;
-  
+
   conflictsContainer.innerHTML = '';
-  
+
   if (conflicts.length === 0) {
     conflictsContainer.innerHTML = '<p>No pending conflicts</p>';
     return;
   }
-  
+
   conflicts.forEach((conflict) => {
     const conflictCard = document.createElement('div');
     conflictCard.className = 'conflict-card';
@@ -161,7 +163,7 @@ async function displayConflictsInUI() {
         <button onclick="resolveConflict(${conflict.id}, 'skip')">Skip</button>
       </div>
     `;
-    
+
     conflictsContainer.appendChild(conflictCard);
   });
 }
@@ -170,14 +172,14 @@ async function displayConflictsInUI() {
 function startSyncMonitoring(intervalMs = 5000) {
   setInterval(async () => {
     const status = await getSyncStatus();
-    
+
     // Check for pending conflicts and alert user
     if (status && status.pendingConflicts > 0) {
       console.warn(`${status.pendingConflicts} conflicts need resolution!`);
       // Show notification or update UI
       showConflictNotification(status.pendingConflicts);
     }
-    
+
     // Check sync health
     if (status && status.state === 'failed') {
       console.error('Sync is in failed state!');
@@ -199,19 +201,19 @@ function showSyncErrorNotification() {
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Sync Engine Example initialized');
-  
+
   // Get initial sync status
   getSyncStatus();
-  
+
   // Start monitoring (optional)
   // startSyncMonitoring();
-  
+
   // Attach event handlers to buttons
   const forceSyncBtn = document.getElementById('force-sync-btn');
   if (forceSyncBtn) {
     forceSyncBtn.addEventListener('click', forceSync);
   }
-  
+
   const refreshConflictsBtn = document.getElementById('refresh-conflicts-btn');
   if (refreshConflictsBtn) {
     refreshConflictsBtn.addEventListener('click', displayConflictsInUI);

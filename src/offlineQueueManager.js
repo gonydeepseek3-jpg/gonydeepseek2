@@ -335,7 +335,15 @@ class OfflineQueueManager {
     }
   }
 
-  addConflict(resourceId, resourceType, localRequestId, localData, serverData, serverVersion, conflictType) {
+  addConflict(
+    resourceId,
+    resourceType,
+    localRequestId,
+    localData,
+    serverData,
+    serverVersion,
+    conflictType
+  ) {
     if (!this.db) return null;
 
     try {
@@ -416,7 +424,7 @@ class OfflineQueueManager {
     try {
       const stmt = this.db.prepare('SELECT * FROM sync_conflicts WHERE id = ?');
       const conflict = stmt.get(conflictId);
-      
+
       if (!conflict) return null;
 
       return {
@@ -453,7 +461,7 @@ class OfflineQueueManager {
     try {
       const stmt = this.db.prepare('SELECT value FROM sync_metadata WHERE key = ?');
       const result = stmt.get(key);
-      
+
       if (!result) return null;
 
       try {

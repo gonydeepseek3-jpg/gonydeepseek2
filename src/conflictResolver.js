@@ -53,7 +53,10 @@ class ConflictResolver {
         status: serverResponse.status,
       });
 
-      const { resourceType, resourceId, data } = this.extractResourceInfo(request.url, request.body);
+      const { resourceType, resourceId, data } = this.extractResourceInfo(
+        request.url,
+        request.body
+      );
 
       return {
         type: 'version_mismatch',
@@ -70,7 +73,10 @@ class ConflictResolver {
         requestId: request.id,
       });
 
-      const { resourceType, resourceId, data } = this.extractResourceInfo(request.url, request.body);
+      const { resourceType, resourceId, data } = this.extractResourceInfo(
+        request.url,
+        request.body
+      );
 
       return {
         type: 'modified_conflict',
@@ -104,7 +110,7 @@ class ConflictResolver {
     if (localTimestamp && serverTimestamp) {
       const localDate = new Date(localTimestamp);
       const serverDate = new Date(serverTimestamp);
-      
+
       resolution = localDate > serverDate ? 'local_wins' : 'server_wins';
     } else {
       resolution = 'server_wins';
@@ -125,7 +131,11 @@ class ConflictResolver {
         requestId: conflict.local_request_id,
       });
     } else if (resolution === 'server_wins' && conflict.local_request_id) {
-      offlineQueueManager.updateRequestStatus(conflict.local_request_id, 'completed', 'Resolved: server wins');
+      offlineQueueManager.updateRequestStatus(
+        conflict.local_request_id,
+        'completed',
+        'Resolved: server wins'
+      );
       logger.info(MODULE, 'Request marked as completed (server wins)', {
         requestId: conflict.local_request_id,
       });
@@ -136,7 +146,7 @@ class ConflictResolver {
 
   async handleConflict(request, serverResponse) {
     const conflictData = this.detectConflict(request, serverResponse);
-    
+
     if (!conflictData) {
       return null;
     }
@@ -163,7 +173,7 @@ class ConflictResolver {
           conflictId,
           resourceType: conflictData.resourceType,
         });
-        
+
         const hookResult = await hook(conflictId, conflictData);
         if (hookResult && hookResult.resolution) {
           offlineQueueManager.resolveConflict(conflictId, hookResult.resolution);
@@ -203,7 +213,11 @@ class ConflictResolver {
     if (resolution === 'local_wins' && conflict.local_request_id) {
       offlineQueueManager.updateRequestStatus(conflict.local_request_id, 'pending');
     } else if (['server_wins', 'skip'].includes(resolution) && conflict.local_request_id) {
-      offlineQueueManager.updateRequestStatus(conflict.local_request_id, 'completed', `Resolved: ${resolution}`);
+      offlineQueueManager.updateRequestStatus(
+        conflict.local_request_id,
+        'completed',
+        `Resolved: ${resolution}`
+      );
     }
 
     return true;
